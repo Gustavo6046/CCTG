@@ -1,13 +1,14 @@
 import socket
 import sys
-import dataparser
-
 from threading import Thread
+
+import dataparser
 
 
 class CCT(object):
     def __init__(self, ips):
         self.client_list = []
+        self.ip_bans = []
         self.num_connections = 0
         self.parser = dataparser.CCTGParser()
 
@@ -45,6 +46,10 @@ class CCT(object):
 
         while True:
             (client, (ip, port)) = listening_socket.accept()
+
+            if ip in self.ip_bans:
+                client.sendall("ERR BANNED_CLIENT\n")
+                continue
 
             self.client_list.append({"client": client, "ip": ip, "port": port})
 
