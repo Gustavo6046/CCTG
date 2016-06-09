@@ -1,19 +1,23 @@
 import socket
 import sys
+import time
 from threading import Thread
 
 import dataparser
 
 
 class CCT(object):
-    def __init__(self, ips):
+    def __init__(self, ips, host, game_name=""):
         self.client_list = []
         self.ip_bans = []
         self.num_connections = 0
-        self.parser = dataparser.CCTGParser()
+        self.parser = dataparser.CCTGParser(game_name)
+        self.start_time = time.time()
+        self.host = host
 
         ip_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         ip_socket.connect(('google.com', 0))
+
         self.our_ip, self.our_port = ip_socket.getsockname()[0], ip_socket.getsockname()[1]
 
         print "Starting connections: " + " ".join(ips)
@@ -29,6 +33,8 @@ class CCT(object):
                 continue
 
             self.add_connection(ip, port)
+
+        print "Doing listening loop!"
 
         self.listening_loop()
 
@@ -54,6 +60,10 @@ class CCT(object):
             self.client_list.append({"client": client, "ip": ip, "port": port})
 
             client.sendall("IPS " + " ".join([":".join((x["ip"], x["port"])) for x in self.client_list]) + "\n")
+
+            if self.host:
+                client.sendall("IAMHOST")
+
             client.sendall("GAMESTATE START\n")
             client.sendall("\n".join(["{} {} {} {}".format(
                 game_data["scope"] + (" " + game_data["client_ip"] if game_data["client_ip"] == "user" else ""),
@@ -96,4 +106,8 @@ class CCT(object):
 
 if __name__ == "__main__":
     print "Starting connections!"
-    CCT(sys.argv[2:])
+    if sys.argv[1].upper() == "HOST":
+        CCT(sys.argv[3:], False, sys.argv[2])
+
+    else:
+        CCT(sys.argv[1:], False)

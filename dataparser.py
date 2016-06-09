@@ -1,21 +1,42 @@
+import json
 import socket
+import time
 
-from gamestate import GameState
+import gamestate
 
 
 class CCTGParser(object):
-    def __init__(self):
+    def __init__(self, game):
         self.parser_state = ""
-        self.game_state = GameState()
+        self.network_host = ""
+        self.start_time = time.time()
+
+        try:
+            self.game_state = gamestate.GameState(json.load(open("games\\{}\\initialstate.cgs".format(game)), "utf-8"))
+
+        except IOError:
+            self.game_state = gamestate.GameState()
 
     def parse_cctg_data(self, client_list, client, data=""):
+        if data == "":
+            return client_list
+
         if data.upper().startswith("IPS "):
             for ip in data.split(" ")[1:]:
                 new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 new_sock.connect((ip.split(":")[0], ip.split(":")[1]))
                 client_list.append({"client": new_sock, "ip": ip.split(":")[0], "port": ip.split(":")[1]})
                 client.sendall("CONNECTEDTO " + ip + "\n")
-            client.sendall("CONNECTIONSDONE")
+            client.sendall("CONNECTIONSDONE\n")
+
+        if data.upper() == "IAMHOST":
+            if self.network_host == "":
+                client.sendall("HOST ACCEPTED\n")
+
+            else:
+                client.sendall("HOST REJECTED\n")
+
+            self.network_host = client.getsockname()[0]
 
         if data.upper() == "GAMESTATE START":
             self.parser_state = "READING_GAME_STATE"
@@ -29,6 +50,15 @@ class CCTGParser(object):
                 data_splits = data.split(" ")
                 self.game_state.set_game_data("state", data_splits[1], data_splits[2], data_splits[3])
                 client.sendall("GOTSDATA {} {} :{}".format(data_splits[1], data_splits[2], data_splits[3]) + "\n")
+                return client_list
+
+            elif data.upper().startswith("SUPERSTATE "):
+                if client.getsockname()[0] != self.network_host:
+                    client.sendall("ERR PERMISSION_DENIED\n")
+
+                data_splits = data.split(" ")
+                self.game_state.set_game_data("superstate", data_splits[1], data_splits[2], data_splits[3])
+                client.sendall("GOTSSDATA {} {} :{}".format(data_splits[1], data_splits[2], data_splits[3]) + "\n")
                 return client_list
 
             elif data.upper().startswith("USER "):
