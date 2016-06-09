@@ -1,6 +1,6 @@
 class GameState(object):
-    def __init__(self, initial_state={}):
-        self.game_data = initial_state
+    def __init__(self, initial_state=()):
+        self.game_data = dict(initial_state)
 
     def set_game_data(self, scope, name, data_type="int", content="0", client_ip=""):
         self.game_data[name] = {

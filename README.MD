@@ -6,4 +6,4 @@ What makes this safe is that the client that starts it all is set as the "Host C
 
 ## Instructions
 
-Command-line parameters: `[host <game name>] <ip> [<ip> [...]]`. Connect to a P2P network using the IPs. If you are to connect in a P2P network without a host and you declare yourself the host, then the host will become you.
+Command-line parameters: `[host <game name> <host port>] [<ip:port> [<ip:port> [...]]]`. Connect to a P2P network using the IPs. If you are to connect in a P2P network without a host and you declare yourself the host, then the host will become you.

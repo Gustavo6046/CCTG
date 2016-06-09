@@ -1,24 +1,27 @@
 import socket
 import sys
+import threading
 import time
-from threading import Thread
 
 import dataparser
 
 
 class CCT(object):
-    def __init__(self, ips, host, game_name=""):
+    def __init__(self, ips, host, port=8000, game_name=""):
         self.client_list = []
         self.ip_bans = []
         self.num_connections = 0
         self.parser = dataparser.CCTGParser(game_name)
         self.start_time = time.time()
         self.host = host
+        self.game_code = open("games\\{}\\state.pec".format(game_name)).readlines()
 
         ip_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         ip_socket.connect(('google.com', 0))
 
-        self.our_ip, self.our_port = ip_socket.getsockname()[0], ip_socket.getsockname()[1]
+        self.our_ip, self.our_port = ip_socket.getsockname()[0], port
+
+        ip_socket.close()
 
         print "Starting connections: " + " ".join(ips)
 
@@ -36,14 +39,22 @@ class CCT(object):
 
         print "Doing listening loop!"
 
-        self.listening_loop()
+        threading.Thread(name="Listening Loop", target=self.listening_loop, args=()).start()
+
+        self.game_loop()
+
+    def game_loop(self):
+        runtime = time.time()
+        for code in self.game_code:
+            eval(code)
 
     def add_connection(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip, port))
         client_index = len(self.client_list)
         self.client_list.append({"client": sock, "ip": ip, "port": port})
-        Thread(name="Connection {}".format(client_index + 1), target=self.connection_loop, args=(client_index,))
+        threading.Thread(name="Connection {}".format(client_index + 1), target=self.connection_loop,
+                         args=(client_index,))
 
     def listening_loop(self):
         listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -107,7 +118,7 @@ class CCT(object):
 if __name__ == "__main__":
     print "Starting connections!"
     if sys.argv[1].upper() == "HOST":
-        CCT(sys.argv[3:], False, sys.argv[2])
+        CCT(sys.argv[4:], False, sys.argv[3], sys.argv[2])
 
     else:
         CCT(sys.argv[1:], False)
