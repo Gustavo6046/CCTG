@@ -56,6 +56,8 @@ class CCT(object):
         for code in self.game_code:
             eval(code)
 
+        time.sleep(0.1)
+
     def add_connection(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip, port))
@@ -72,16 +74,15 @@ class CCT(object):
         listening_socket.listen(2)
 
         while True:
-            try:
-                (client, (ip, port)) = listening_socket.accept()
+            while True:
+                try:
+                    (client, (ip, port)) = listening_socket.accept()
 
-            except socket.error:
-                continue
+                except socket.error:
+                    continue
 
-            else:
-                break
-
-        while True:
+                else:
+                    break
 
             if ip in self.ip_bans:
                 socketeer.send_to_socket(client, "ERR BANNED_CLIENT\n")
@@ -120,6 +121,7 @@ class CCT(object):
                         raw += client_dict["client"].recv(4096)
 
                     except socket.error:
+                        time.sleep(0.0625)
                         continue
 
                     if not raw.endswith("\n"):
@@ -132,8 +134,12 @@ class CCT(object):
             return
 
     def __del__(self):
-        for client in self.client_list:
-            socketeer.send_to_socket(client["client"], "TERMINATINGCLIENT {} {}".format(self.our_ip, self.our_port))
+        try:
+            for client in self.client_list:
+                socketeer.send_to_socket(client["client"], "TERMINATINGCLIENT {} {}".format(self.our_ip, self.our_port))
+
+        except socket.error:
+            print "Error: Failed sending termination data!"
 
         print "Server ran for {} seconds!".format(time.time() - self.start_time)
 
@@ -142,7 +148,7 @@ if __name__ == "__main__":
     print "Starting connections!"
     if sys.argv[1].upper() == "HOST":
         try:
-            CCT(sys.argv[4:], False, sys.argv[3], sys.argv[2])
+            CCT(sys.argv[4:], True, sys.argv[3], sys.argv[2])
 
         except IndexError:
             CCT([], False, sys.argv[3], sys.argv[2])
