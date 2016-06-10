@@ -11,6 +11,7 @@ class CCTGParser(object):
         self.parser_state = ""
         self.network_host = ""
         self.start_time = time.time()
+        self.total_received_messages = []
 
         try:
             self.game_state = gamestate.GameState(json.load(open("games\\{}\\initialstate.cgs".format(game)), "utf-8"))
@@ -19,7 +20,8 @@ class CCTGParser(object):
             self.game_state = gamestate.GameState()
 
     def parse_cctg_data(self, client_list, client, data=""):
-        print data.strip("\n")
+        print "Received \'{}\'!".format(data.strip("\n"))
+        self.total_received_messages.append(data)
 
         if data == "":
             return client_list

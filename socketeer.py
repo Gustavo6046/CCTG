@@ -1,10 +1,16 @@
+import socket
+
 def send_to_socket(sock, string, encoding="utf-8"):
     bytes_sent = 0
 
-    print "Sending {} to socket {}:{}!".format(string, sock.getsockname()[0], sock.getsockname()[1])
+    print "Sending {} to some indeterminable socket!".format(string)
 
     while True:
-        bytes_sent += sock.send(string[bytes_sent:].encode(encoding))
+        try:
+            bytes_sent += sock.send(string[bytes_sent:].encode(encoding))
+
+        except socket.error:
+            return 1
 
         if bytes_sent > 0:
             continue
@@ -12,4 +18,4 @@ def send_to_socket(sock, string, encoding="utf-8"):
         if bytes_sent == -1:
             continue
 
-        return
+        return 0

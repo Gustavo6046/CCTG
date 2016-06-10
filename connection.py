@@ -1,3 +1,4 @@
+import errno
 import socket
 import sys
 import threading
@@ -8,12 +9,13 @@ import socketeer
 
 
 class CCT(object):
-    def __init__(self, ips, host, port=8000, game_name=""):
+    def __init__(self, ips, host, port=8000, listening_port=8100, game_name=""):
         self.client_list = []
         self.ip_bans = []
         self.num_connections = 0
         self.parser = dataparser.CCTGParser(game_name)
         self.start_time = time.time()
+        self.listening_port = listening_port
         self.host = host
 
         if host:
@@ -38,9 +40,10 @@ class CCT(object):
             except IndexError:
                 continue
 
-            self.add_connection(ip, port)
+            threading.Thread(name="Connection Adder {}:{}".format(ip, port), target=self.add_connection,
+                             args=(ip, port)).start()
 
-        print "Doing listening loop as {}:{}!".format(self.our_ip, self.our_port)
+        print "Doing listening loop as {}:{}!".format(self.our_ip, self.listening_port)
 
         threading.Thread(name="Listening Loop", target=self.listening_loop, args=()).start()
 
@@ -49,6 +52,10 @@ class CCT(object):
 
         while True:
             data_to_send_to_network = raw_input("> ")
+
+            if data_to_send_to_network == "terminate":
+                exit("Termination requested by user.")
+
             for client in self.client_list:
                 socketeer.send_to_socket(client["client"], data_to_send_to_network + "\n")
 
@@ -60,35 +67,44 @@ class CCT(object):
 
     def add_connection(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((ip, port))
+        sock.bind((self.our_ip, int(self.our_port)))
+
+        try:
+            sock.connect((ip, port))
+
+        except socket.error as this_error:
+            print "Error connecting to {}:{} (Errno {})!".format(ip, port, errno.errorcode[this_error.errno])
+            return
+
         sock.setblocking(False)
         client_index = len(self.client_list)
         self.client_list.append({"client": sock, "ip": ip, "port": port})
         threading.Thread(name="Connection {}".format(client_index + 1), target=self.connection_loop,
                          args=(client_index,))
 
+        return
+
     def listening_loop(self):
         listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listening_socket.setblocking(False)
-        listening_socket.bind((self.our_ip, int(self.our_port)))
+        listening_socket.bind((self.our_ip, int(self.listening_port)))
+        listening_socket.setblocking(True)
         listening_socket.listen(2)
 
         while True:
-            while True:
-                try:
-                    (client, (ip, port)) = listening_socket.accept()
+            (client, (ip, port)) = listening_socket.accept()
 
-                except socket.error:
-                    continue
-
-                else:
-                    break
+            listening_socket.setblocking(False)
 
             if ip in self.ip_bans:
                 socketeer.send_to_socket(client, "ERR BANNED_CLIENT\n")
                 continue
 
+            if (ip, port) in [(x["ip"], x["port"]) for x in self.client_list]:
+                continue
+
             self.client_list.append({"client": client, "ip": ip, "port": port})
+
+            print self.client_list
 
             socketeer.send_to_socket(client, "IPS " + " ".join(
                 [":".join((x["ip"], str(x["port"]))) for x in self.client_list]) + "\n")
@@ -120,8 +136,9 @@ class CCT(object):
                     try:
                         raw += client_dict["client"].recv(4096)
 
-                    except socket.error:
-                        time.sleep(0.0625)
+                    except socket.error as this_error:
+                        time.sleep(0.08)
+                        print errno.errorcode[this_error.errno]
                         continue
 
                     if not raw.endswith("\n"):
@@ -148,10 +165,10 @@ if __name__ == "__main__":
     print "Starting connections!"
     if sys.argv[1].upper() == "HOST":
         try:
-            CCT(sys.argv[4:], True, sys.argv[3], sys.argv[2])
+            CCT(sys.argv[5:], True, sys.argv[3], sys.argv[4], sys.argv[2])
 
         except IndexError:
             CCT([], False, sys.argv[3], sys.argv[2])
 
     else:
-        CCT(sys.argv[2:], False, sys.argv[1])
+        CCT(sys.argv[3:], False, sys.argv[1], sys.argv[2])
