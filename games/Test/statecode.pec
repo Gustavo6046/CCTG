@@ -1,0 +1,6 @@
+print "Game loop."
+self.parser.game_state.game_data["entry2"]["content"] = str(
+    int(self.parser.game_state.game_data["entry2"]["content"]) + 1)
+import time
+
+time.sleep(5)

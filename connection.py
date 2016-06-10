@@ -30,6 +30,8 @@ class CCT(object):
 
         print "Starting connections: " + " ".join(ips)
 
+        adder_threads = []
+
         for x in ips:
             self.num_connections += 1
 
@@ -40,8 +42,14 @@ class CCT(object):
             except IndexError:
                 continue
 
-            threading.Thread(name="Connection Adder {}:{}".format(ip, port), target=self.add_connection,
-                             args=(ip, port)).start()
+            adder_threads.append(
+                threading.Thread(name="Connection Adder {}:{}".format(ip, port), target=self.add_connection,
+                                 args=(ip, port)))
+            adder_threads[-1].start()
+
+            for thread in adder_threads:
+                if thread.join() == 2:
+                    sys.exit(2)
 
         print "Doing listening loop as {}:{}!".format(self.our_ip, self.listening_port)
 
@@ -61,9 +69,7 @@ class CCT(object):
 
     def game_loop(self):
         for code in self.game_code:
-            eval(code)
-
-        time.sleep(0.1)
+            exec (code.encode("utf-8"))
 
     def add_connection(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -74,7 +80,15 @@ class CCT(object):
 
         except socket.error as this_error:
             print "Error connecting to {}:{} (Errno {})!".format(ip, port, errno.errorcode[this_error.errno])
-            return
+
+            self.num_connections -= 1
+
+            if self.num_connections == 0 and not self.host:
+                print "No connections!"
+                sys.exit(2)
+                return 2
+
+            return 1
 
         sock.setblocking(False)
         client_index = len(self.client_list)
@@ -82,17 +96,16 @@ class CCT(object):
         threading.Thread(name="Connection {}".format(client_index + 1), target=self.connection_loop,
                          args=(client_index,))
 
-        return
+        return 0
 
     def listening_loop(self):
         listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listening_socket.bind((self.our_ip, int(self.listening_port)))
-        listening_socket.setblocking(True)
         listening_socket.listen(2)
 
         while True:
+            listening_socket.setblocking(True)
             (client, (ip, port)) = listening_socket.accept()
-
             listening_socket.setblocking(False)
 
             if ip in self.ip_bans:
