@@ -4,6 +4,7 @@ import threading
 import time
 
 import dataparser
+import socketeer
 
 
 class CCT(object):
@@ -14,7 +15,9 @@ class CCT(object):
         self.parser = dataparser.CCTGParser(game_name)
         self.start_time = time.time()
         self.host = host
-        self.game_code = open("games\\{}\\state.pec".format(game_name)).readlines()
+
+        if host:
+            self.game_code = open("games\\{}\\statecode.pec".format(game_name)).readlines()
 
         ip_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         ip_socket.connect(('google.com', 0))
@@ -37,20 +40,26 @@ class CCT(object):
 
             self.add_connection(ip, port)
 
-        print "Doing listening loop!"
+        print "Doing listening loop as {}:{}!".format(self.our_ip, self.our_port)
 
         threading.Thread(name="Listening Loop", target=self.listening_loop, args=()).start()
 
-        self.game_loop()
+        if host:
+            threading.Thread(name="Game Loop", target=self.game_loop, args=()).start()
+
+        while True:
+            data_to_send_to_network = raw_input("> ")
+            for client in self.client_list:
+                socketeer.send_to_socket(client["client"], data_to_send_to_network + "\n")
 
     def game_loop(self):
-        runtime = time.time()
         for code in self.game_code:
             eval(code)
 
     def add_connection(self, ip, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip, port))
+        sock.setblocking(False)
         client_index = len(self.client_list)
         self.client_list.append({"client": sock, "ip": ip, "port": port})
         threading.Thread(name="Connection {}".format(client_index + 1), target=self.connection_loop,
@@ -58,30 +67,42 @@ class CCT(object):
 
     def listening_loop(self):
         listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listening_socket.bind((self.our_ip, self.our_port))
+        listening_socket.setblocking(False)
+        listening_socket.bind((self.our_ip, int(self.our_port)))
         listening_socket.listen(2)
 
         while True:
-            (client, (ip, port)) = listening_socket.accept()
+            try:
+                (client, (ip, port)) = listening_socket.accept()
+
+            except socket.error:
+                continue
+
+            else:
+                break
+
+        while True:
 
             if ip in self.ip_bans:
-                client.sendall("ERR BANNED_CLIENT\n")
+                socketeer.send_to_socket(client, "ERR BANNED_CLIENT\n")
                 continue
 
             self.client_list.append({"client": client, "ip": ip, "port": port})
 
-            client.sendall("IPS " + " ".join([":".join((x["ip"], x["port"])) for x in self.client_list]) + "\n")
+            socketeer.send_to_socket(client, "IPS " + " ".join(
+                [":".join((x["ip"], str(x["port"]))) for x in self.client_list]) + "\n")
 
             if self.host:
-                client.sendall("IAMHOST")
+                socketeer.send_to_socket(client, "IAMHOST")
 
-            client.sendall("GAMESTATE START\n")
-            client.sendall("\n".join(["{} {} {} {}".format(
+            socketeer.send_to_socket(client, "GAMESTATE START\n")
+            socketeer.send_to_socket(client, "\n".join(["{} {} {} {}".format(
                 game_data["scope"] + (" " + game_data["client_ip"] if game_data["client_ip"] == "user" else ""),
                 game_data["name"],
                 game_data["type"],
                 game_data["content"]
             ) for game_data in self.parser.game_state.game_data.values()]))
+            socketeer.send_to_socket(client, "GAMESTATE END\n")
 
     def connection_loop(self, client_index):
         try:
@@ -112,13 +133,19 @@ class CCT(object):
 
     def __del__(self):
         for client in self.client_list:
-            client["client"].sendall("TERMINATINGCLIENT {} {}".format(self.our_ip, self.our_port))
+            socketeer.send_to_socket(client["client"], "TERMINATINGCLIENT {} {}".format(self.our_ip, self.our_port))
+
+        print "Server ran for {} seconds!".format(time.time() - self.start_time)
 
 
 if __name__ == "__main__":
     print "Starting connections!"
     if sys.argv[1].upper() == "HOST":
-        CCT(sys.argv[4:], False, sys.argv[3], sys.argv[2])
+        try:
+            CCT(sys.argv[4:], False, sys.argv[3], sys.argv[2])
+
+        except IndexError:
+            CCT([], False, sys.argv[3], sys.argv[2])
 
     else:
-        CCT(sys.argv[1:], False)
+        CCT(sys.argv[2:], False, sys.argv[1])
